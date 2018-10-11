@@ -2,6 +2,7 @@
 
 #import <UIKit/UIKit.h>
 #import "LogosHeader.h"
+#import <objc/message.h>
 
 #pragma Mark - 设置界面注入
 
@@ -116,6 +117,7 @@
     
     if (MSHookIvar<int>(arg1, "m_uiMessageType") == 49) {
         NSLog(@"红包来了\n%@", arg1);
+
     }
     
     %orig;
@@ -129,19 +131,19 @@
 
 - (void)OnOpenRedEnvelopes {
     
-   NSDictionary *dicBaseInfo = MSHookIvar<NSDictionary *>(self, "m_dicBaseInfo");
-    
-    NSLog(@"OnOpenRedEnvelopes");
-    for(NSString *key in dicBaseInfo.allKeys)  {
-        NSLog(@"-- %@ : %@", key, dicBaseInfo[key]);
-    }
-    
-    
-    WCRedEnvelopesReceiveControlLogic *delegate = MSHookIvar<WCRedEnvelopesReceiveControlLogic *>(self, "m_delegate");
-    
-    [delegate WCRedEnvelopesReceiveHomeViewOpenList];
-    
-    
+    %orig;
+//    NSDictionary *dicBaseInfo = MSHookIvar<NSDictionary *>(self, "m_dicBaseInfo");
+//
+//    NSLog(@"OnOpenRedEnvelopes");
+//    for(NSString *key in dicBaseInfo.allKeys)  {
+//        NSLog(@"-- %@ : %@", key, dicBaseInfo[key]);
+//    }
+//
+//
+//    WCRedEnvelopesReceiveControlLogic *delegate = MSHookIvar<WCRedEnvelopesReceiveControlLogic *>(self, "m_delegate");
+//
+//    [delegate WCRedEnvelopesReceiveHomeViewOpenList];
+//
 }
 
 %end
@@ -149,12 +151,137 @@
 
 %hook WCRedEnvelopesReceiveControlLogic
 
-- (void)WCRedEnvelopesReceiveHomeViewOpenList {
+- (void)WCRedEnvelopesReceiveHomeViewOpenRedEnvelopes {
+    
     
 
-    NSString *m_c2cNativeUrl = MSHookIvar<WCRedEnvelopesControlData *>(self, "m_data").m_oSelectedMessageWrap.m_oWCPayInfoItem.m_c2cNativeUrl;
+    WCRedEnvelopesControlData *m_data = MSHookIvar<WCRedEnvelopesControlData *>(self, "m_data");
+    CMessageWrap *m_oSelectedMessageWrap = [m_data m_oSelectedMessageWrap];
     
-    NSLog(@"%@", m_c2cNativeUrl);
+    WCPayInfoItem *m_oWCPayInfoItem = [m_oSelectedMessageWrap m_oWCPayInfoItem];
+
+
+    NSString *m_c2cNativeUrl = [m_oWCPayInfoItem m_c2cNativeUrl];
+
+    NSInteger length = [@"wxpay://c2cbizmessagehandler/hongbao/receivehongbao?" length];
+//
+    NSString *url = [m_c2cNativeUrl substringFromIndex: length];
+//
+//
+    NSDictionary * componets = [%c(WCBizUtil) dictionaryWithDecodedComponets: url separator: @"&"];
+
+    NSMutableDictionary *dictM = [NSMutableDictionary dictionary];
+
+    dictM[@"msgType"] = @"1";
+
+
+    dictM[@"sendId"] = componets[@"sendid"];
+
+
+
+    dictM[@"channelId"] = componets[@"channelid"];
+
+
+    MMServiceCenter *serviceCenter = [%c(MMServiceCenter) defaultCenter];
+
+    CContactMgr *service = [serviceCenter getService:[%c(CContactMgr) class]];
+
+
+    CContact *contact = [service getSelfContact];
+
+    NSString *displayName = [contact getContactDisplayName];
+
+    dictM[@"nickName"] = displayName;
+
+
+    NSString *headImgUrl = [contact m_nsHeadImgUrl];
+
+    dictM[@"headImg"] = headImgUrl;
+
+    CMessageWrap *selectedMessageWrap = [m_data m_oSelectedMessageWrap];
+
+
+
+    if (selectedMessageWrap) {
+
+
+
+        CMessageWrap *selectedMessageWrap = [m_data m_oSelectedMessageWrap];
+
+
+        WCPayInfoItem *m_oWCPayInfoItem = [selectedMessageWrap m_oWCPayInfoItem];
+
+        NSString *m_c2cNativeUrl = [m_oWCPayInfoItem m_c2cNativeUrl];
+
+
+
+        dictM[@"nativeUrl"] = m_c2cNativeUrl;
+
+    }
+
+//
+    MMMsgLogicManager *msgLogicManager = [serviceCenter getService: [%c(MMMsgLogicManager) class]];
+//
+//
+    WeixinContentLogicController *currentLogicController = [msgLogicManager GetCurrentLogicController];
+//
+//
+    if (currentLogicController ) {
+
+
+
+        CBaseContact *m_contact = [currentLogicController m_contact];
+
+        if (m_contact) {
+
+
+            NSString *m_nsUsrName = [m_contact m_nsUsrName];
+
+            if (m_nsUsrName) {
+
+
+                dictM[@"sessionUserName"] = m_nsUsrName;
+
+            }
+        }
+    }
+
+    NSDictionary *m_structDicRedEnvelopesBaseInfo = [m_data m_structDicRedEnvelopesBaseInfo];
+
+    NSString *timingIdentifier = m_structDicRedEnvelopesBaseInfo[@"timingIdentifier"];
+
+
+    if (timingIdentifier.length)
+    {
+
+
+        dictM[@"timingIdentifier"] = timingIdentifier;
+    }
+
+    WCPayLogicMgr *payLogicService = [serviceCenter getService: [%c(WCPayLogicMgr) class]];
+
+
+    [payLogicService setRealnameReportScene:1003];
+
+
+
+    WCPayLogicMgr *payLogicService2 = [serviceCenter getService: [%c(WCPayLogicMgr) class]];
+
+    NSDictionary *redEnvelopesBaseInfo = [m_data m_structDicRedEnvelopesBaseInfo];
+
+    id agreeDuty = [redEnvelopesBaseInfo objectForKeyedSubscript: @"agree_duty"];
+
+    [payLogicService2 checkHongbaoOpenLicense:agreeDuty acceptCallback:^() {
+
+        MMServiceCenter *serviceCenter = [%c(MMServiceCenter) defaultCenter];
+
+        WCRedEnvelopesLogicMgr *logic = [serviceCenter getService: [%c(WCRedEnvelopesLogicMgr) class]];
+
+        [logic OpenRedEnvelopesRequest: dictM];
+
+    } denyCallback: ^() {
+
+    }];
 
 }
 
